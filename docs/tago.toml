@@ -1,0 +1,10 @@
+title       = "kage"
+baseURL     = "https://kage.tamnd.com/"
+description = "kage (影, shadow) clones any website into a self-contained folder you can browse offline, with all the JavaScript stripped out. It renders every page in headless Chrome, removes every script, and localises the CSS, images, and fonts."
+contentDir  = "content"
+outputDir   = "public"
+theme       = "tago-doks"
+syntaxHighlight = "true"
+
+[params]
+github = "https://github.com/tamnd/kage"
