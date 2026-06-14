@@ -81,7 +81,7 @@ func TestBuildZIMRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 
 	// Main page is the root index.
 	mp, err := r.MainPage()
@@ -182,7 +182,7 @@ func TestBinaryTrailerRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	fi, _ := f.Stat()
 	end := fi.Size()
 
@@ -223,7 +223,7 @@ func TestHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 
 	srv := httptest.NewServer(Handler(r))
 	defer srv.Close()
@@ -233,7 +233,7 @@ func TestHandler(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		b, _ := io.ReadAll(resp.Body)
 		return resp.StatusCode, string(b)
 	}

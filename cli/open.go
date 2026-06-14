@@ -37,7 +37,7 @@ func runOpen(ctx context.Context, path, addr string, openBrowser bool) error {
 	if err != nil {
 		return fmt.Errorf("cannot open %q: %w", path, err)
 	}
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {

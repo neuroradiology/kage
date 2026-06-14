@@ -182,7 +182,7 @@ func htmlTitleOf(mirrorDir, mainURL string) string {
 	if err != nil {
 		return ""
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	doc, err := html.Parse(f)
 	if err != nil {
 		return ""
