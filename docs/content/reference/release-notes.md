@@ -6,6 +6,15 @@ weight: 40
 
 The authoritative, commit-level history lives in [`CHANGELOG.md`](https://github.com/tamnd/kage/blob/main/CHANGELOG.md) and on the [releases page](https://github.com/tamnd/kage/releases). This page summarises each version.
 
+## v0.1.2
+
+A security fix for how kage launches Chrome, clearer crawl errors, and a container image that actually runs.
+
+- **Chrome keeps its sandbox on by default.** Earlier versions launched Chrome with `--no-sandbox` on every run, which switched off the browser's main security boundary even on an ordinary desktop where the sandbox works fine ([#10](https://github.com/tamnd/kage/issues/10)). The sandbox now stays on, and is dropped only where it genuinely cannot start: inside a container (detected from `IN_DOCKER` or `/.dockerenv`) or when running as root. Whenever it is dropped, kage says so on stderr, so the choice is never silent.
+- **Transient asset failures retry.** A download that hits a 403/429, a 5xx, or a network blip is retried with a short backoff, which recovers files that bot-protection rejects on the first request of a burst. Permanent failures like a 404 are not retried.
+- **Clearer crawl errors.** Each failure now logs a classified reason (`HTTP 403 Forbidden`, `timed out`, ...), the URL, and the page that referenced it, and the end-of-run summary lists what went wrong instead of printing only a count.
+- **The container image runs.** Chrome aborted in the image with `chrome_crashpad_handler: --database is required`, so the crash reporter is now disabled inside a container, and the `kage` user has a writable home (the mounted `/out` volume) so output, resume state, and Chrome's profile no longer fail with a permission error ([#7](https://github.com/tamnd/kage/issues/7)).
+
 ## v0.1.1
 
 Packing, so a clone can travel as one file instead of a folder.
