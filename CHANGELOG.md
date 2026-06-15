@@ -6,6 +6,22 @@ All notable changes to kage are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-06-15
+
+### Fixed
+
+- A served mirror whose entry point is a nested page no longer loses its CSS and
+  images when opened at the root. kage saves each page's asset links as
+  mirror-relative paths (`../_kage/...`) computed for that page's own location,
+  but the viewer answered `/` with the main page's bytes in place, so the browser
+  resolved those relative URLs against `/` and missed every one. A
+  `developer.apple.com/documentation` mirror, whose main page is
+  `developer.apple.com/documentation/index.html`, landed at `/` completely
+  unstyled. kage now redirects `/` to the main page's canonical content path, the
+  way the archive's `W/mainPage` redirect already does, so the browser resolves
+  the page's relative assets correctly. Kiwix was unaffected because it follows
+  that redirect itself.
+
 ## [0.3.0] - 2026-06-15
 
 ### Added
@@ -180,7 +196,8 @@ can browse offline, with every script stripped out.
   a multi-arch container image on GHCR (Chromium bundled), checksums, SBOMs, and
   a cosign signature, all cut from one version tag by GoReleaser.
 
-[Unreleased]: https://github.com/tamnd/kage/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/tamnd/kage/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/tamnd/kage/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/tamnd/kage/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/tamnd/kage/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/tamnd/kage/compare/v0.1.2...v0.2.0

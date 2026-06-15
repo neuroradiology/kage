@@ -6,6 +6,12 @@ weight: 40
 
 The authoritative, commit-level history lives in [`CHANGELOG.md`](https://github.com/tamnd/kage/blob/main/CHANGELOG.md) and on the [releases page](https://github.com/tamnd/kage/releases). This page summarises each version.
 
+## v0.3.1
+
+A fix for broken styling when a packed mirror's home page is a nested page.
+
+- **`/` redirects to the main page instead of serving it in place.** A page's saved asset links are mirror-relative (`../_kage/...`), computed for that page's own location. The viewer was answering `/` with the main page's bytes directly, so the browser resolved those links against `/` and 404ed the page's CSS and images. A `developer.apple.com/documentation` mirror opened at `/` came up completely unstyled. kage now redirects `/` to the main page's canonical path, the way the archive's `W/mainPage` redirect does, so relative assets resolve correctly. Kiwix already followed that redirect, so it was never affected.
+
 ## v0.3.0
 
 Leaner mirrors, and a way to publish one as a dataset. A clone now keeps the assets that make a site readable offline and leaves the bulk downloads on the live web, and a packed archive converts to a columnar table that drops straight into dataset tooling.
