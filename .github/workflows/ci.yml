@@ -48,9 +48,15 @@ jobs:
         run: go vet ./...
       - name: build
         run: go build ./...
+      # The GitHub Ubuntu runner disables unprivileged user namespaces (AppArmor),
+      # so Chrome's sandbox cannot initialize there and the secure default would
+      # make it refuse to start. IN_DOCKER is kage's documented escape hatch for
+      # exactly that case, and setting it here also exercises the container path.
+      # macOS does not need it, so it stays empty on that leg.
       - name: test
         env:
           KAGE_CHROME: ${{ steps.chrome.outputs.chrome-path }}
+          IN_DOCKER: ${{ matrix.os == 'ubuntu-latest' && '1' || '' }}
         run: go test -race -count=1 -coverprofile=coverage.out ./...
       - name: coverage summary
         if: matrix.os == 'ubuntu-latest'
