@@ -6,6 +6,18 @@ weight: 40
 
 The authoritative, commit-level history lives in [`CHANGELOG.md`](https://github.com/tamnd/kage/blob/main/CHANGELOG.md) and on the [releases page](https://github.com/tamnd/kage/releases). This page summarises each version.
 
+## v0.3.0
+
+Leaner mirrors, and a way to publish one as a dataset. A clone now keeps the assets that make a site readable offline and leaves the bulk downloads on the live web, and a packed archive converts to a columnar table that drops straight into dataset tooling.
+
+- **Bulk downloads stay remote by default.** Video and audio, installers and disk images (`.dmg`, `.pkg`, `.exe`, `.msi`, ...), archives, and PDFs are left pointing at their live URL rather than downloaded, because they are rarely needed to read a site offline yet routinely make up most of its bytes. On a `developer.apple.com` crawl that class was 18 of 19 GB. Page-rendering assets (images, fonts, CSS) are untouched. `--keep-media` restores the old behaviour, and `--skip-ext .foo` leaves more extensions remote.
+- **Assets come only from the site's own domain by default.** Localising is scoped to the seed's registrable domain, so `developer.apple.com` still pulls from `www.apple.com` and `images.apple.com` but not a separate brand domain or an off-topic third party (an embedded tracker, an unrelated CDN). `--all-asset-hosts` downloads from any host as before.
+- **The size cap skips instead of truncating.** An asset over `--max-asset-mb` was being saved as exactly the first N MB of itself, a corrupt fragment that would never play or run. kage now checks the response size and leaves an over-cap asset out of the mirror entirely, pointing at its live URL. On the apple crawl this was about a gigabyte of half-downloaded WWDC videos and `.dmg` installers.
+- **`kage parquet export` and `import`.** A packed ZIM converts to a flat Parquet table, one row per entry with clear columns (`doc_id`, `url`, `host`, `crawl_date`, `mime`, text, content), the shape a dataset host like [Hugging Face](https://huggingface.co) expects and that DuckDB or pandas reads as is. The column names follow the [open-index/open-markdown](https://huggingface.co/datasets/open-index/open-markdown) dataset, with `doc_id` a deterministic UUID v5 of the page URL, so a kage export sits alongside other web-crawl datasets. The conversion is lossless: a ZIM round-tripped through Parquet reproduces every entry, its metadata, and the main page byte for byte.
+- **`kage pack --incremental`.** Packing keeps a small cache sidecar next to the output and reuses the compression of any cluster whose bytes have not changed since the last pack. Compressing clusters with zstd is the dominant cost of packing a large mirror, so re-packing after a small change (a `--refresh`, a handful of edited pages) only compresses what actually changed. A reused cluster is byte-for-byte what a fresh compression produces, so the archive stays deterministic.
+- **Identical pages are stored once.** When a rendered page's bytes match a page already written, kage stores it as a hard link to the first copy instead of a second full file, collapsing the duplicate content a faceted site spawns when many `?q=…`/`?page=…` URLs render the same page. The summary reports how many were deduped.
+- **Cleaner progress counting.** The live counter shows distinct URL paths as "pages" and the query-string permutations one path can spawn separately as "variants", so the number tracks the site's real size instead of being inflated by `?q=…` URLs.
+
 ## v0.2.1
 
 Packed ZIM archives now carry the metadata Kiwix expects, so a mirror shows up in a ZIM reader's library with a title, a description, and an icon instead of as a blank entry.

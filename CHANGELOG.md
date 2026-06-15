@@ -6,6 +6,8 @@ All notable changes to kage are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-15
+
 ### Added
 
 - `kage parquet export <file.zim>` and `kage parquet import <file.parquet>`
@@ -178,7 +180,8 @@ can browse offline, with every script stripped out.
   a multi-arch container image on GHCR (Chromium bundled), checksums, SBOMs, and
   a cosign signature, all cut from one version tag by GoReleaser.
 
-[Unreleased]: https://github.com/tamnd/kage/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/tamnd/kage/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/tamnd/kage/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/tamnd/kage/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/tamnd/kage/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/tamnd/kage/compare/v0.1.1...v0.1.2
