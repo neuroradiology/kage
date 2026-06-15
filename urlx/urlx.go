@@ -19,6 +19,8 @@ import (
 	"net/url"
 	"path"
 	"strings"
+
+	"golang.org/x/net/publicsuffix"
 )
 
 // Kind distinguishes a crawlable page from a downloadable asset; the two map to
@@ -216,6 +218,34 @@ func SameSite(seed, u *url.URL, allowSub bool) bool {
 		return true
 	}
 	return false
+}
+
+// SameRegistrableDomain reports whether u shares the seed's registrable domain
+// (its eTLD+1). It is looser than SameSite: developer.apple.com, www.apple.com,
+// and images.apple.com all fold to apple.com and count as same-domain, while a
+// separate brand like cdn-apple.com or an unrelated third party like
+// ec.europa.eu does not. It is how kage decides whether an asset host is "the
+// site's own" without listing every subdomain a CDN might use. When either host
+// has no registrable domain (an IP, an oddball TLD), it falls back to an exact
+// host match so the decision stays conservative.
+func SameRegistrableDomain(seed, u *url.URL) bool {
+	sh, uh := seed.Hostname(), u.Hostname()
+	if sh == uh {
+		return true
+	}
+	sd, err1 := publicsuffix.EffectiveTLDPlusOne(sh)
+	ud, err2 := publicsuffix.EffectiveTLDPlusOne(uh)
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	return sd == ud
+}
+
+// Ext returns the lowercased file extension of a URL's last path segment,
+// including the leading dot (".pdf", ".mp4"), or "" when there is none. It
+// ignores the query string, so "/a/clip.mp4?v=2" reports ".mp4".
+func Ext(u *url.URL) string {
+	return strings.ToLower(path.Ext(lastSegment(u.Path)))
 }
 
 // InScope reports whether u should be crawled as a page given the seed and cfg.

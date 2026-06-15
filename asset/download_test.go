@@ -94,6 +94,69 @@ func TestGetGivesUpAfterRetries(t *testing.T) {
 	}
 }
 
+func TestGetSkipsOverCapByContentLength(t *testing.T) {
+	var hits int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&hits, 1)
+		body := make([]byte, 4096) // declared via Content-Length
+		w.Header().Set("Content-Type", "video/mp4")
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+
+	d := NewDownloader("kage-test", 5*time.Second, 1024) // cap below the body
+	u, _ := url.Parse(srv.URL + "/clip.mp4")
+	_, err := d.Get(context.Background(), u, "")
+	if !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("got %v; want ErrTooLarge", err)
+	}
+	if hits != 1 {
+		t.Errorf("an over-cap asset should not be retried; server saw %d hits", hits)
+	}
+}
+
+func TestGetSkipsOverCapWithoutContentLength(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// A chunked response carries no Content-Length, so the cap is only known
+		// after reading past it.
+		w.Header().Set("Content-Type", "application/octet-stream")
+		fl, _ := w.(http.Flusher)
+		chunk := make([]byte, 512)
+		for i := 0; i < 8; i++ {
+			_, _ = w.Write(chunk)
+			if fl != nil {
+				fl.Flush()
+			}
+		}
+	}))
+	defer srv.Close()
+
+	d := NewDownloader("kage-test", 5*time.Second, 1024)
+	u, _ := url.Parse(srv.URL + "/stream.bin")
+	_, err := d.Get(context.Background(), u, "")
+	if !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("got %v; want ErrTooLarge", err)
+	}
+}
+
+func TestGetKeepsUnderCap(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write([]byte("small"))
+	}))
+	defer srv.Close()
+
+	d := NewDownloader("kage-test", 5*time.Second, 1024)
+	u, _ := url.Parse(srv.URL + "/logo.png")
+	res, err := d.Get(context.Background(), u, "")
+	if err != nil {
+		t.Fatalf("under-cap asset: %v", err)
+	}
+	if string(res.Body) != "small" {
+		t.Errorf("body = %q; want %q", res.Body, "small")
+	}
+}
+
 func TestTransientClassification(t *testing.T) {
 	transientCodes := []int{403, 408, 425, 429, 500, 502, 503}
 	for _, c := range transientCodes {

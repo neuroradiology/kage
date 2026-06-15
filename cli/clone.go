@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -15,33 +16,36 @@ import (
 
 // cloneFlags holds the parsed flag values for one invocation.
 type cloneFlags struct {
-	out          string
-	reserved     string
-	workers      int
-	assetWorkers int
-	browserPages int
-	maxPages     int
-	maxDepth     int
-	traversal    string
-	maxAssetMB   int64
-	timeout      time.Duration
-	settle       time.Duration
-	renderTO     time.Duration
-	scroll       bool
-	userAgent    string
-	subdomains   bool
-	scopePrefix  string
-	exclude      []string
-	noRobots     bool
-	noSitemap    bool
-	headful      bool
-	keepNoscript bool
-	chromeBin    string
-	controlURL   string
-	noResume     bool
-	refresh      bool
-	force        bool
-	quiet        bool
+	out           string
+	reserved      string
+	workers       int
+	assetWorkers  int
+	browserPages  int
+	maxPages      int
+	maxDepth      int
+	traversal     string
+	maxAssetMB    int64
+	keepMedia     bool
+	skipExt       []string
+	allAssetHosts bool
+	timeout       time.Duration
+	settle        time.Duration
+	renderTO      time.Duration
+	scroll        bool
+	userAgent     string
+	subdomains    bool
+	scopePrefix   string
+	exclude       []string
+	noRobots      bool
+	noSitemap     bool
+	headful       bool
+	keepNoscript  bool
+	chromeBin     string
+	controlURL    string
+	noResume      bool
+	refresh       bool
+	force         bool
+	quiet         bool
 }
 
 func newCloneCmd() *cobra.Command {
@@ -66,7 +70,10 @@ func newCloneCmd() *cobra.Command {
 	fs.IntVarP(&f.maxPages, "max-pages", "p", 0, "stop after N pages (0 = unlimited)")
 	fs.IntVarP(&f.maxDepth, "max-depth", "d", 0, "link-follow depth cap (0 = unlimited)")
 	fs.StringVar(&f.traversal, "traversal", "bfs", "frontier order: bfs or dfs")
-	fs.Int64Var(&f.maxAssetMB, "max-asset-mb", 25, "skip assets larger than N MB")
+	fs.Int64Var(&f.maxAssetMB, "max-asset-mb", 25, "skip assets larger than N MB (left on the live web)")
+	fs.BoolVar(&f.keepMedia, "keep-media", false, "download bulk media, installers, and PDFs instead of leaving them remote")
+	fs.StringSliceVar(&f.skipExt, "skip-ext", nil, "extra asset extensions to leave remote, e.g. .svg (repeatable)")
+	fs.BoolVar(&f.allAssetHosts, "all-asset-hosts", false, "localize assets from any host, not just the seed's domain")
 	fs.DurationVar(&f.timeout, "timeout", 30*time.Second, "per-request timeout")
 	fs.DurationVar(&f.settle, "settle", 1500*time.Millisecond, "network-idle quiet period before snapshot")
 	fs.DurationVar(&f.renderTO, "render-timeout", 30*time.Second, "hard cap per page render")
@@ -104,6 +111,23 @@ func runClone(ctx context.Context, arg string, f *cloneFlags) error {
 	cfg.MaxDepth = f.maxDepth
 	cfg.Traversal = f.traversal
 	cfg.MaxAssetBytes = f.maxAssetMB << 20
+	cfg.AssetSameDomain = !f.allAssetHosts
+	if f.keepMedia {
+		cfg.SkipAssetExts = map[string]bool{}
+	}
+	for _, e := range f.skipExt {
+		e = strings.ToLower(strings.TrimSpace(e))
+		if e == "" {
+			continue
+		}
+		if !strings.HasPrefix(e, ".") {
+			e = "." + e
+		}
+		if cfg.SkipAssetExts == nil {
+			cfg.SkipAssetExts = map[string]bool{}
+		}
+		cfg.SkipAssetExts[e] = true
+	}
 	cfg.Timeout = f.timeout
 	cfg.Settle = f.settle
 	cfg.RenderTimeout = f.renderTO
@@ -195,6 +219,9 @@ func printSummary(res clone.Result) {
 	}
 	if res.PagesLinked > 0 {
 		fmt.Fprintf(os.Stderr, "  %s %d\n", styleDim.Render("deduped (linked)"), res.PagesLinked)
+	}
+	if res.AssetSkipped > 0 {
+		fmt.Fprintf(os.Stderr, "  %s %d\n", styleDim.Render("assets over cap (left remote)"), res.AssetSkipped)
 	}
 	if res.PageErrors+res.AssetErrors > 0 {
 		fmt.Fprintf(os.Stderr, "  %s %d\n", styleErr.Render("errors"), res.PageErrors+res.AssetErrors)

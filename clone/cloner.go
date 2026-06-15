@@ -278,6 +278,9 @@ func (c *Cloner) processPage(ctx context.Context, j pageItem) {
 			}
 			return u.String() // external page link stays on the live web
 		default: // Asset
+			if !c.wantAsset(u) {
+				return u.String() // off-domain or bulk media: leave it on the live web
+			}
 			c.enqueueAsset(ctx, u, j.u.String())
 			local := urlx.LocalPath(c.seedHost, u, urlx.Asset, c.cfg.Reserved)
 			return urlx.Rel(fileDir, local)
@@ -312,6 +315,13 @@ func (c *Cloner) processAsset(ctx context.Context, j assetItem) {
 	}
 	res, err := c.dl.Get(ctx, j.u, j.referer)
 	if err != nil {
+		if errors.Is(err, asset.ErrTooLarge) {
+			// Over the size cap: leave it out rather than save a truncated
+			// fragment. Count it as skipped, not failed, so the run is clean.
+			c.stats.assetSkipped.Add(1)
+			c.logf("asset skipped (over %d MB): %s", c.cfg.MaxAssetBytes>>20, j.u.String())
+			return
+		}
 		c.failAsset(j.u.String(), j.referer, err)
 		return
 	}
@@ -321,6 +331,9 @@ func (c *Cloner) processAsset(ctx context.Context, j assetItem) {
 	if res.IsCSS {
 		fileDir := urlx.Dir(localFile)
 		cssSink := func(u *url.URL, _ urlx.Kind) string {
+			if !c.wantAsset(u) {
+				return u.String() // off-domain or bulk media: leave it on the live web
+			}
 			c.enqueueAsset(ctx, u, j.u.String())
 			local := urlx.LocalPath(c.seedHost, u, urlx.Asset, c.cfg.Reserved)
 			return urlx.Rel(fileDir, local)
@@ -405,6 +418,22 @@ func (c *Cloner) enqueuePage(ctx context.Context, u *url.URL, depth int) bool {
 			c.wg.Done()
 		}
 	}()
+	return true
+}
+
+// wantAsset reports whether an asset should be downloaded and localized, or left
+// pointing at its live URL. kage skips two classes by default: assets on a host
+// outside the seed's registrable domain (a third-party tracker, an unrelated
+// CDN), and bulk media, installers, and archives whose extension is in the skip
+// set. Both are decisions a page worker can make from the URL alone, before any
+// download, so the rewritten HTML simply keeps the remote link.
+func (c *Cloner) wantAsset(u *url.URL) bool {
+	if c.cfg.AssetSameDomain && !urlx.SameRegistrableDomain(c.seed, u) {
+		return false
+	}
+	if c.cfg.SkipAssetExts[urlx.Ext(u)] {
+		return false
+	}
 	return true
 }
 

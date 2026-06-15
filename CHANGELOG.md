@@ -34,6 +34,18 @@ All notable changes to kage are recorded here. The format follows
 
 ### Changed
 
+- Clones no longer pull a site's bulk downloads into the mirror by default. Video
+  and audio, installers and disk images (`.dmg`, `.pkg`, `.exe`, `.msi`, ...),
+  archives, and PDFs are left pointing at their live URL instead of downloaded,
+  because they are rarely needed to read a site offline yet routinely make up
+  most of its bytes (a developer.apple.com crawl was 18 of 19 GB of such assets).
+  Page-rendering assets (images, fonts, CSS) are unaffected. `--keep-media`
+  restores the old behavior, and `--skip-ext .foo` leaves more extensions remote.
+- Assets are localized only from the seed's own registrable domain by default.
+  developer.apple.com still pulls from www.apple.com and images.apple.com, but a
+  separate brand domain or an unrelated third party (an embedded tracker, an
+  off-topic CDN) is left on the live web rather than mirrored. `--all-asset-hosts`
+  restores downloading assets from any host.
 - The progress line now counts real pages. "pages" is the number of distinct URL
   paths written, and the query-string variants that one path can spawn by the
   thousand are shown separately as "variants", so the live counter tracks the
@@ -41,6 +53,13 @@ All notable changes to kage are recorded here. The format follows
 
 ### Fixed
 
+- An asset larger than the size cap (`--max-asset-mb`, 25 by default) is now
+  skipped instead of being truncated to a corrupt fragment. The cap was a
+  `LimitReader`, so an over-size file was saved as exactly the first N MB of
+  itself: a broken video or installer that wasted disk and would never play or
+  run. kage now checks the response size and leaves an over-cap asset out of the
+  mirror entirely, pointing at its live URL. On a developer.apple.com crawl this
+  was around a gigabyte of truncated WWDC videos and `.dmg` installers.
 - An asset URL whose query string carries a raw space is now requested with the
   space percent-encoded, so the server gets a valid request instead of rejecting
   it. Real sites bust a stylesheet's cache with a date, producing an href like

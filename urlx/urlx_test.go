@@ -116,6 +116,40 @@ func TestInScope(t *testing.T) {
 	}
 }
 
+func TestSameRegistrableDomain(t *testing.T) {
+	seed := mustParse(t, "https://developer.apple.com/")
+	cases := map[string]bool{
+		"https://developer.apple.com/x": true,
+		"https://www.apple.com/x":       true,
+		"https://images.apple.com/x":    true,
+		"https://apple.com/x":           true,
+		"https://cdn-apple.com/x":       false,
+		"https://ec.europa.eu/x":        false,
+		"https://mmbiz.qpic.cn/x":       false,
+	}
+	for u, want := range cases {
+		if got := SameRegistrableDomain(seed, mustParse(t, u)); got != want {
+			t.Errorf("SameRegistrableDomain(%q) = %v, want %v", u, got, want)
+		}
+	}
+}
+
+func TestExt(t *testing.T) {
+	cases := map[string]string{
+		"https://ex.com/a/clip.mp4":     ".mp4",
+		"https://ex.com/a/clip.MP4?v=2": ".mp4",
+		"https://ex.com/style.css":      ".css",
+		"https://ex.com/docs/":          "",
+		"https://ex.com/docs":           "",
+		"https://ex.com/Xcode_15.0.dmg": ".dmg",
+	}
+	for u, want := range cases {
+		if got := Ext(mustParse(t, u)); got != want {
+			t.Errorf("Ext(%q) = %q, want %q", u, got, want)
+		}
+	}
+}
+
 func TestLikelyPage(t *testing.T) {
 	cases := map[string]bool{
 		"https://ex.com/docs":      true,

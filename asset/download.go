@@ -42,6 +42,13 @@ type Result struct {
 	IsCSS       bool
 }
 
+// ErrTooLarge reports that an asset exceeds the size cap and was skipped without
+// being saved. It is deliberately a skip, not a download failure: the caller
+// leaves the asset out of the mirror rather than writing a truncated fragment of
+// it, so a 500 MB installer or video never bloats the archive with a corrupt
+// quarter of itself.
+var ErrTooLarge = errors.New("asset over size cap")
+
 // StatusError reports a non-2xx HTTP response. It carries the code so callers
 // can render a clear message ("HTTP 403 Forbidden") and decide whether a retry
 // is worthwhile, without the URL baked in (the caller already has it).
@@ -109,13 +116,25 @@ func (d *Downloader) try(ctx context.Context, u *url.URL, referer string) (*Resu
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, &StatusError{Code: resp.StatusCode}
 	}
+	// Skip an over-cap asset instead of truncating it. A Content-Length lets us
+	// bail before reading a byte; otherwise we read one byte past the cap and, if
+	// the body really is larger, discard what we have. Either way nothing partial
+	// reaches disk.
+	if d.MaxBytes > 0 && resp.ContentLength > d.MaxBytes {
+		return nil, ErrTooLarge
+	}
 	var r io.Reader = resp.Body
 	if d.MaxBytes > 0 {
-		r = io.LimitReader(resp.Body, d.MaxBytes)
+		// Read at most one byte past the cap so a body with no (or a lying)
+		// Content-Length cannot stream gigabytes into memory before we notice.
+		r = io.LimitReader(resp.Body, d.MaxBytes+1)
 	}
 	body, err := io.ReadAll(r)
 	if err != nil {
 		return nil, err
+	}
+	if d.MaxBytes > 0 && int64(len(body)) > d.MaxBytes {
+		return nil, ErrTooLarge
 	}
 	ct := resp.Header.Get("Content-Type")
 	return &Result{
@@ -140,6 +159,9 @@ func backoff(i int) time.Duration {
 // retried, but a cancelled or expired context is not.
 func transient(err error) bool {
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	if errors.Is(err, ErrTooLarge) {
 		return false
 	}
 	var se *StatusError

@@ -36,6 +36,16 @@ type Config struct {
 	Traversal     string
 	MaxAssetBytes int64
 
+	// AssetSameDomain, when set, localizes only assets whose host shares the
+	// seed's registrable domain (apple.com covers developer.apple.com and
+	// www.apple.com but not cdn-apple.com or an unrelated third party). An
+	// off-domain asset is left pointing at its live URL instead of downloaded.
+	AssetSameDomain bool
+	// SkipAssetExts lists asset extensions (".mp4", ".pdf", ".dmg", …) that are
+	// left on the live web rather than downloaded, so bulk media, installers, and
+	// archives do not bloat the mirror. The reference keeps its remote URL.
+	SkipAssetExts map[string]bool
+
 	Timeout       time.Duration // per HTTP request
 	Settle        time.Duration // network-idle quiet period
 	RenderTimeout time.Duration // hard cap per page render
@@ -70,25 +80,52 @@ type Config struct {
 const DefaultUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
 	"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
+// DefaultSkipAssetExts returns the asset extensions kage leaves on the live web
+// by default: bulk media, installers, and archives that rarely matter for
+// reading a site offline but dominate its download size (a docs site's WWDC
+// videos, .dmg/.pkg installers, and PDF manuals can be most of the bytes).
+// Page-rendering assets (images, fonts, CSS) are deliberately absent, so the
+// offline pages still look right.
+func DefaultSkipAssetExts() map[string]bool {
+	exts := []string{
+		// Video and audio.
+		".mp4", ".m4v", ".mov", ".avi", ".mkv", ".webm", ".flv", ".wmv",
+		".m3u8", ".ts", ".mp3", ".wav", ".flac", ".aac", ".ogg", ".oga",
+		// Installers and disk images.
+		".dmg", ".pkg", ".exe", ".msi", ".deb", ".rpm", ".appimage", ".iso",
+		// Archives.
+		".zip", ".tar", ".gz", ".tgz", ".bz2", ".xz", ".7z", ".rar",
+		// Documents that download rather than render.
+		".pdf",
+	}
+	m := make(map[string]bool, len(exts))
+	for _, e := range exts {
+		m[e] = true
+	}
+	return m
+}
+
 // DefaultConfig returns the baseline configuration.
 func DefaultConfig() Config {
 	return Config{
-		OutDir:        DefaultOutDir(),
-		Reserved:      urlx.DefaultReserved,
-		Workers:       4,
-		AssetWorkers:  8,
-		BrowserPages:  4,
-		MaxAssetBytes: 25 << 20,
-		Traversal:     "bfs",
-		Timeout:       30 * time.Second,
-		Settle:        1500 * time.Millisecond,
-		RenderTimeout: 30 * time.Second,
-		UserAgent:     DefaultUserAgent,
-		RespectRobots: true,
-		FollowSitemap: true,
-		Headless:      true,
-		Resume:        true,
-		Persist:       true,
+		OutDir:          DefaultOutDir(),
+		Reserved:        urlx.DefaultReserved,
+		Workers:         4,
+		AssetWorkers:    8,
+		BrowserPages:    4,
+		MaxAssetBytes:   25 << 20,
+		AssetSameDomain: true,
+		SkipAssetExts:   DefaultSkipAssetExts(),
+		Traversal:       "bfs",
+		Timeout:         30 * time.Second,
+		Settle:          1500 * time.Millisecond,
+		RenderTimeout:   30 * time.Second,
+		UserAgent:       DefaultUserAgent,
+		RespectRobots:   true,
+		FollowSitemap:   true,
+		Headless:        true,
+		Resume:          true,
+		Persist:         true,
 	}
 }
 

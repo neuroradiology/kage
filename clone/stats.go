@@ -12,13 +12,14 @@ const maxRecordedFailures = 100
 
 // stats are the live counters of a run, read by the CLI's progress ticker.
 type stats struct {
-	pages       atomic.Int64 // page documents written (one per output file)
-	pagePaths   atomic.Int64 // distinct URL paths among those, ignoring query
-	pagesLinked atomic.Int64 // pages stored as a hard link to identical content
-	assets      atomic.Int64
-	pageErrors  atomic.Int64
-	assetErrors atomic.Int64
-	skipped     atomic.Int64 // robots-disallowed or out of budget
+	pages        atomic.Int64 // page documents written (one per output file)
+	pagePaths    atomic.Int64 // distinct URL paths among those, ignoring query
+	pagesLinked  atomic.Int64 // pages stored as a hard link to identical content
+	assets       atomic.Int64
+	assetSkipped atomic.Int64 // assets left on the live web (over the size cap)
+	pageErrors   atomic.Int64
+	assetErrors  atomic.Int64
+	skipped      atomic.Int64 // robots-disallowed or out of budget
 
 	muPaths  sync.Mutex
 	seenPath map[string]struct{}
@@ -78,24 +79,26 @@ func (s *stats) recordedFailures() []Failure {
 // distinct URL paths those represent once query strings are ignored. The
 // difference, Pages-PagePaths, is the number of query-string variants.
 type Progress struct {
-	Pages       int64
-	PagePaths   int64
-	PagesLinked int64
-	Assets      int64
-	PageErrors  int64
-	AssetErrors int64
-	Skipped     int64
+	Pages        int64
+	PagePaths    int64
+	PagesLinked  int64
+	Assets       int64
+	AssetSkipped int64
+	PageErrors   int64
+	AssetErrors  int64
+	Skipped      int64
 }
 
 func (s *stats) snapshot() Progress {
 	return Progress{
-		Pages:       s.pages.Load(),
-		PagePaths:   s.pagePaths.Load(),
-		PagesLinked: s.pagesLinked.Load(),
-		Assets:      s.assets.Load(),
-		PageErrors:  s.pageErrors.Load(),
-		AssetErrors: s.assetErrors.Load(),
-		Skipped:     s.skipped.Load(),
+		Pages:        s.pages.Load(),
+		PagePaths:    s.pagePaths.Load(),
+		PagesLinked:  s.pagesLinked.Load(),
+		Assets:       s.assets.Load(),
+		AssetSkipped: s.assetSkipped.Load(),
+		PageErrors:   s.pageErrors.Load(),
+		AssetErrors:  s.assetErrors.Load(),
+		Skipped:      s.skipped.Load(),
 	}
 }
 
