@@ -2,6 +2,7 @@ package browser
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -113,5 +114,88 @@ func TestRenderCapturesFinalDOM(t *testing.T) {
 	}
 	if !strings.Contains(res.HTML, "rendered-by-js") {
 		t.Errorf("render did not capture the JS-built DOM:\n%s", res.HTML)
+	}
+}
+
+func TestIsHTML(t *testing.T) {
+	cases := []struct {
+		ct   string
+		want bool
+	}{
+		{"text/html", true},
+		{"text/html; charset=utf-8", true},
+		{"TEXT/HTML", true},
+		{"  text/html ", true},
+		{"application/xhtml+xml", true},
+		{"", true}, // unknown: render rather than misclassify
+		{"application/zip", false},
+		{"text/csv", false},
+		{"application/pdf", false},
+		{"image/png", false},
+		{"application/json", false},
+		{"application/octet-stream", false},
+	}
+	for _, c := range cases {
+		if got := isHTML(c.ct); got != c.want {
+			t.Errorf("isHTML(%q) = %v, want %v", c.ct, got, c.want)
+		}
+	}
+}
+
+func TestRenderRoutesNonHTML(t *testing.T) {
+	if testing.Short() {
+		t.Skip("render test drives Chrome; skipped under -short")
+	}
+	if _, ok := LookChrome(); !ok {
+		t.Skip("no Chrome/Chromium found; skipping render test")
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/page":
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write([]byte(`<!doctype html><html><body><p>a real page</p></body></html>`))
+		case "/file.zip", "/download":
+			// A binary served with no useful extension on the path, the shape that
+			// makes Chrome download to ~/Downloads when navigated to (issue #32).
+			w.Header().Set("Content-Type", "application/zip")
+			_, _ = w.Write([]byte("PK\x03\x04 not really a zip"))
+		case "/data":
+			w.Header().Set("Content-Type", "text/csv")
+			_, _ = w.Write([]byte("a,b\n1,2\n"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	p := New(Options{Headless: true, Workers: 1, Settle: 300 * time.Millisecond, RenderTimeout: 20 * time.Second})
+	defer func() { _ = p.Close() }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	// A real HTML page renders as before.
+	if res, err := p.Render(ctx, srv.URL+"/page"); err != nil {
+		t.Errorf("render HTML page: %v", err)
+	} else if !strings.Contains(res.HTML, "a real page") {
+		t.Errorf("HTML page did not render:\n%s", res.HTML)
+	}
+
+	// Non-HTML navigation targets come back as *ErrNotHTML so the caller can route
+	// them to the asset downloader instead of saving a broken page or downloading.
+	for _, tc := range []struct{ path, wantCT string }{
+		{"/download", "application/zip"},
+		{"/data", "text/csv"},
+	} {
+		_, err := p.Render(ctx, srv.URL+tc.path)
+		var notHTML *ErrNotHTML
+		if !errors.As(err, &notHTML) {
+			t.Errorf("Render(%s) error = %v, want *ErrNotHTML", tc.path, err)
+			continue
+		}
+		if !strings.Contains(notHTML.ContentType, tc.wantCT) {
+			t.Errorf("Render(%s) content type = %q, want %q", tc.path, notHTML.ContentType, tc.wantCT)
+		}
 	}
 }

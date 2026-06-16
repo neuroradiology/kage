@@ -6,6 +6,12 @@ All notable changes to kage are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Chrome no longer downloads a file to your Downloads folder when a crawl follows a link that turns out to be a binary (reported in #32).
+  An extensionless link is queued as a page, so the page worker navigated to it in Chrome, and a link that served a zip or a CSV made Chrome save the file to `~/Downloads`, a surprise side effect of a clone.
+  kage now denies Chrome-initiated downloads browser-wide, since every asset is fetched through kage's own downloader, and detects a navigation whose response is not HTML and reroutes that URL to the asset downloader, where the size and media policy decides whether to localise it or leave it on the live web.
+
 ## [0.3.2] - 2026-06-16
 
 ### Fixed

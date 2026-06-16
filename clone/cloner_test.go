@@ -261,6 +261,79 @@ func TestCloneRefreshReRenders(t *testing.T) {
 	}
 }
 
+// TestCloneRoutesNonHTMLToAsset guards issue #32: an extensionless link that
+// turns out to be a file (a zip) is classified as a page up front, but once the
+// page worker sees it is not HTML it must be handed to the asset downloader, not
+// saved as a broken page nor downloaded by Chrome to ~/Downloads.
+func TestCloneRoutesNonHTMLToAsset(t *testing.T) {
+	if testing.Short() {
+		t.Skip("clone test drives Chrome; skipped under -short")
+	}
+	if _, ok := browser.LookChrome(); !ok {
+		t.Skip("no Chrome/Chromium found; skipping clone test")
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		// The link has no extension, so it is queued as a page; the server then
+		// answers it with a zip.
+		_, _ = w.Write([]byte(`<!doctype html><html><body>
+<h1>Home</h1><a href="/download">grab the bundle</a></body></html>`))
+	})
+	mux.HandleFunc("/download", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/zip")
+		_, _ = w.Write([]byte("PK\x03\x04 pretend bundle"))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	seed, err := urlx.ParseSeed(srv.URL)
+	if err != nil {
+		t.Fatalf("parse seed: %v", err)
+	}
+
+	out := t.TempDir()
+	cfg := DefaultConfig()
+	cfg.OutDir = out
+	cfg.Settle = 300 * time.Millisecond
+	cfg.RenderTimeout = 20 * time.Second
+	cfg.Timeout = 10 * time.Second
+
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+
+	res, err := New(seed, cfg, t.Logf).Run(ctx)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	root := res.OutDir
+	// The home page is a real page and is written.
+	if !fileExists(filepath.Join(root, "index.html")) {
+		t.Error("home page was not written")
+	}
+	// The zip is NOT saved as a page: no download/index.html exists.
+	if fileExists(filepath.Join(root, "download", "index.html")) {
+		t.Error("non-HTML target was saved as a page")
+	}
+	// The zip is fetched as an asset under the reserved tree instead.
+	if res.Assets < 1 {
+		t.Errorf("expected the zip to be fetched as an asset, assets=%d", res.Assets)
+	}
+	assetDir := filepath.Join(root, cfg.Reserved)
+	if !anyFileUnder(t, assetDir, "download") {
+		t.Error("the zip was not downloaded into the reserved asset tree")
+	}
+	if res.PageErrors != 0 {
+		t.Errorf("a rerouted non-HTML target must not count as a page error, got %d", res.PageErrors)
+	}
+}
+
 func readFile(t *testing.T, path string) string {
 	t.Helper()
 	b, err := os.ReadFile(path)

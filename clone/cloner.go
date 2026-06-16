@@ -255,6 +255,22 @@ func (c *Cloner) processPage(ctx context.Context, j pageItem) {
 
 	res, err := c.pool.Render(ctx, j.u.String())
 	if err != nil {
+		var notHTML *browser.ErrNotHTML
+		if errors.As(err, &notHTML) {
+			// The URL is not a page but a file (a zip, a CSV, a bare image) that
+			// reached the page worker through an extensionless link. Hand it to the
+			// asset downloader, where the size and media policy decides whether to
+			// localise it or leave it remote, rather than saving a broken page or
+			// letting Chrome download it to the user's Downloads folder (issue #32).
+			c.front.markVisited(key)
+			if c.wantAsset(j.u) {
+				c.enqueueAsset(ctx, j.u, "")
+				c.logf("not a page, fetching as asset (%s): %s", notHTML.ContentType, j.u.String())
+			} else {
+				c.logf("not a page, left on the live web (%s): %s", notHTML.ContentType, j.u.String())
+			}
+			return
+		}
 		c.failPage(j.u.String(), fmt.Errorf("render: %w", err))
 		return
 	}

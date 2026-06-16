@@ -67,6 +67,21 @@ type RenderResult struct {
 	Title    string
 }
 
+// ErrNotHTML reports that a URL kage tried to render as a page is not HTML: the
+// server returned some other content type (a zip, a CSV, a PDF, a bare image).
+// Such a URL reaches the page worker when its link carried no file extension to
+// classify it by. The caller reroutes it to the asset downloader, where the
+// asset policy decides whether to localise or leave it remote, instead of saving
+// an empty or broken page or letting Chrome download it (issue #32).
+type ErrNotHTML struct {
+	URL         string
+	ContentType string
+}
+
+func (e *ErrNotHTML) Error() string {
+	return fmt.Sprintf("not HTML (%s): %s", e.ContentType, e.URL)
+}
+
 // Render navigates to rawURL, lets it settle, and returns the final rendered
 // HTML. It acquires a page slot from the pool and releases it when done.
 func (p *Pool) Render(ctx context.Context, rawURL string) (RenderResult, error) {
@@ -90,8 +105,23 @@ func (p *Pool) Render(ctx context.Context, rawURL string) (RenderResult, error) 
 
 	page = page.Context(ctx).Timeout(p.opts.RenderTimeout)
 
-	if err := page.Navigate(rawURL); err != nil {
-		return RenderResult{}, fmt.Errorf("navigate %s: %w", rawURL, err)
+	// Watch the main document's response so a navigation that turns out to be a
+	// non-HTML resource (a zip, a CSV, a bare image) is caught and handed back for
+	// the asset downloader, rather than rendered as a broken page or, with downloads
+	// denied, left as an aborted navigation (issue #32). The content type arrives in
+	// the response headers whether Chrome renders the body or aborts it as a denied
+	// download, so this catches both.
+	mainContentType := watchMainDocument(page)
+
+	navErr := page.Navigate(rawURL)
+	// A denied download aborts the navigation, so inspect the captured content type
+	// before treating a navigation error as a failure. waitFor gives the response
+	// event a brief moment to be processed; for an HTML page it returns at once.
+	if ct := waitFor(ctx, mainContentType, 2*time.Second); ct != "" && !isHTML(ct) {
+		return RenderResult{}, &ErrNotHTML{URL: rawURL, ContentType: ct}
+	}
+	if navErr != nil {
+		return RenderResult{}, fmt.Errorf("navigate %s: %w", rawURL, navErr)
 	}
 	if err := page.WaitLoad(); err != nil {
 		return RenderResult{}, fmt.Errorf("wait load %s: %w", rawURL, err)
@@ -169,6 +199,21 @@ func (p *Pool) getBrowser() (*rod.Browser, error) {
 	if err := b.Connect(); err != nil {
 		return nil, fmt.Errorf("connect Chrome: %w", err)
 	}
+
+	// kage never wants Chrome to write a file to disk. Every asset is fetched
+	// through kage's own downloader, which applies the size and media policy, so a
+	// Chrome-initiated download is only ever an accident: navigating an <a> link
+	// that turns out to be a binary (a zip, an installer, a CSV) makes Chrome save
+	// it to the user's Downloads folder, a surprise side effect of a crawl
+	// (issue #32). Denying downloads browser-wide stops that. The navigation is
+	// aborted instead, and Render's non-HTML detection reroutes the URL through the
+	// asset downloader, where the asset policy decides its fate. This is
+	// best-effort: if the call is unsupported, the non-HTML detection still keeps
+	// the binary out of the saved mirror.
+	_ = proto.BrowserSetDownloadBehavior{
+		Behavior: proto.BrowserSetDownloadBehaviorBehaviorDeny,
+	}.Call(b)
+
 	p.browser = b
 	return b, nil
 }
@@ -319,6 +364,74 @@ func envBool(name string) (val, ok bool) {
 	default:
 		return true, true
 	}
+}
+
+// watchMainDocument subscribes to network responses and returns an accessor for
+// the main document's content type. The first Document-type response is the main
+// frame's navigation; later Document responses are sub-frames (iframes), whose
+// type kage does not police, so only the first is kept. The accessor is safe to
+// call from another goroutine. Any setup error leaves the accessor returning "",
+// which the caller reads as "unknown, render normally".
+func watchMainDocument(page *rod.Page) func() string {
+	var (
+		mu sync.Mutex
+		ct string
+	)
+	if err := (proto.NetworkEnable{}).Call(page); err != nil {
+		return func() string { return "" }
+	}
+	wait := page.EachEvent(func(e *proto.NetworkResponseReceived) {
+		if e.Type != proto.NetworkResourceTypeDocument || e.Response == nil {
+			return
+		}
+		mu.Lock()
+		if ct == "" {
+			ct = e.Response.MIMEType
+		}
+		mu.Unlock()
+	})
+	// EachEvent's wait blocks until the page context ends, draining events as they
+	// arrive; run it for the page's lifetime. The deferred page.Close in Render
+	// cancels the context and unblocks it.
+	go wait()
+	return func() string {
+		mu.Lock()
+		defer mu.Unlock()
+		return ct
+	}
+}
+
+// waitFor polls get until it returns a non-empty value, the deadline passes, or
+// the context is cancelled, then returns whatever it last saw. It exists because
+// the network response is processed on another goroutine, so the value may not be
+// set the instant Navigate returns; an HTML page sets it within a few
+// milliseconds, while a never-arriving response simply waits out the deadline.
+func waitFor(ctx context.Context, get func() string, deadline time.Duration) string {
+	const step = 20 * time.Millisecond
+	for waited := time.Duration(0); waited < deadline; waited += step {
+		if v := get(); v != "" {
+			return v
+		}
+		select {
+		case <-ctx.Done():
+			return get()
+		case <-time.After(step):
+		}
+	}
+	return get()
+}
+
+// isHTML reports whether a document content type is one kage renders and saves as
+// a page. HTML and XHTML qualify; an empty type is treated as HTML so an unlabelled
+// response still renders. Anything else (a zip, a CSV, a PDF, a bare image or
+// JSON) is an asset that reached the page worker because its link carried no file
+// extension to classify it by.
+func isHTML(contentType string) bool {
+	mt := strings.ToLower(strings.TrimSpace(contentType))
+	if i := strings.IndexByte(mt, ';'); i >= 0 {
+		mt = strings.TrimSpace(mt[:i])
+	}
+	return mt == "" || mt == "text/html" || mt == "application/xhtml+xml"
 }
 
 // settle waits for the network to go quiet for d, recovering from any rod
