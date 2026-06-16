@@ -6,6 +6,12 @@ weight: 40
 
 The authoritative, commit-level history lives in [`CHANGELOG.md`](https://github.com/tamnd/kage/blob/main/CHANGELOG.md) and on the [releases page](https://github.com/tamnd/kage/releases). This page summarises each version.
 
+## v0.3.3
+
+A fix for Chrome saving a file to your Downloads folder mid-crawl.
+
+- **A crawl never writes to your Downloads folder.** A link with no file extension is queued as a page, so the page worker opened it in Chrome. When such a link served a binary, a zip or a CSV, Chrome saved the file to `~/Downloads`, a surprise side effect of running a clone ([#32](https://github.com/tamnd/kage/issues/32)). kage now denies Chrome-initiated downloads outright, since every asset is fetched through kage's own downloader and the browser never needs to write a file. As a second layer, kage detects a navigation whose response is not HTML and reroutes that URL to the asset downloader, where the size and media policy decides whether to localise it or leave it on the live web, instead of saving a broken page.
+
 ## v0.3.2
 
 A fix for garbled text on pages that did not carry a charset of their own.
