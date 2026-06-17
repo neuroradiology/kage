@@ -6,6 +6,17 @@ All notable changes to kage are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-06-17
+
+### Fixed
+
+- `kage serve` now stops on Ctrl-C instead of ignoring it.
+  The preview server was started with a blocking call that never watched for an interrupt, so the only way to stop it was to kill the process.
+  kage now shuts the server down gracefully on an interrupt or a `SIGTERM`, with a short timeout before it forces the listener closed, so a preview exits cleanly. Thanks to Xirui Wang (#35) and Kaidi Zhao (#38).
+- A page whose JavaScript builds a deeply nested object graph no longer fails to clone.
+  Chrome's DevTools Protocol returns "Object reference chain is too long" while loading such a page, but the HTML has already loaded and the error is only about Chrome's internal object tracking, not the document.
+  kage now recognises that specific error and finishes rendering the page instead of dropping it (reported in #36). Thanks to Gautam Kumar (#39).
+
 ## [0.3.3] - 2026-06-16
 
 ### Fixed
@@ -213,7 +224,8 @@ can browse offline, with every script stripped out.
   a multi-arch container image on GHCR (Chromium bundled), checksums, SBOMs, and
   a cosign signature, all cut from one version tag by GoReleaser.
 
-[Unreleased]: https://github.com/tamnd/kage/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/tamnd/kage/compare/v0.3.4...HEAD
+[0.3.4]: https://github.com/tamnd/kage/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/tamnd/kage/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/tamnd/kage/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/tamnd/kage/compare/v0.3.0...v0.3.1

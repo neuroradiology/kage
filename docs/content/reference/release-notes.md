@@ -6,6 +6,13 @@ weight: 40
 
 The authoritative, commit-level history lives in [`CHANGELOG.md`](https://github.com/tamnd/kage/blob/main/CHANGELOG.md) and on the [releases page](https://github.com/tamnd/kage/releases). This page summarises each version.
 
+## v0.3.4
+
+Two community fixes: a clean stop for `kage serve`, and pages with heavy JavaScript that used to be dropped.
+
+- **`kage serve` stops on Ctrl-C.** The preview server was started with a blocking call that never watched for an interrupt, so stopping it meant killing the process. kage now shuts the server down gracefully on an interrupt or a `SIGTERM`, with a short timeout before forcing the listener closed. Thanks to Xirui Wang ([#35](https://github.com/tamnd/kage/pull/35)) and Kaidi Zhao ([#38](https://github.com/tamnd/kage/pull/38)).
+- **Pages with deeply nested JavaScript still clone.** Chrome's DevTools Protocol returns "Object reference chain is too long" while loading a page whose script builds a deeply nested object graph, but the page's HTML has already loaded and the error is only about Chrome's internal object tracking. kage now recognises that error and finishes rendering instead of dropping the page ([#36](https://github.com/tamnd/kage/issues/36)). Thanks to Gautam Kumar ([#39](https://github.com/tamnd/kage/pull/39)).
+
 ## v0.3.3
 
 A fix for Chrome saving a file to your Downloads folder mid-crawl.
