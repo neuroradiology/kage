@@ -6,6 +6,19 @@ All notable changes to kage are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-06-19
+
+### Fixed
+
+- `kage clone --mobile` now produces a correct layout when the source page uses table-based navigation with image maps, as paulgraham.com does.
+  Three rendering problems appeared in Kiwix iOS after the 0.3.5 release: a tall blank box at the top of every page, content clipped on the right edge, and a narrow spacer column occupying screen space.
+  The blank box came from hiding only the `<img usemap>` element while leaving its `<td>` container in place; the cell collapsed to empty but kept its full height.
+  `td:has(>img[usemap])` now hides the entire nav column rather than just the image inside it.
+  The right-side clip came from `width="435"` set directly as an HTML attribute on the inner content table; the earlier `max-width` CSS rule does not override HTML attributes.
+  A new `[width]{width:auto!important;max-width:100%!important}` rule cancels every fixed HTML width attribute on any element — tables, cells, and images alike — so the content column stretches to fill the phone screen.
+  The spacer column (a 26 px `<td>` holding a 1×1 transparent GIF) kept its allocated width for the same reason; `td:has(>img[src*="trans_1x1"]:only-child)` hides it alongside the nav column.
+  Two additional rules round out the fix: `*{box-sizing:border-box}` prevents padding from pushing content past the viewport edge, and `img{max-width:100%;height:auto}` keeps any inline photos within their column.
+
 ## [0.3.5] - 2026-06-19
 
 ### Changed
