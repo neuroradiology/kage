@@ -303,21 +303,37 @@ func findElement(n *html.Node, a atom.Atom) *html.Node {
 	return nil
 }
 
-// mobileCSS is injected when MobileReadable is set. It targets legacy "font
-// era" HTML that renders as microscopic text on mobile:
-//   - :root font-size 18 px — baseline all em/rem sizes upward
-//   - body — centre, cap width, add padding, loosen line height
-//   - font element — override the in-HTML size/face attributes that sites like
-//     paulgraham.com embed directly in the markup (e.g. <font size="2">)
-//   - table/td — prevent overflow; add minimal cell breathing room
-//   - img[usemap], map — image-map navigation is useless offline (the image
-//     itself usually 404s from an external CDN); hide both the image and the map
-const mobileCSS = `body{max-width:720px;margin:0 auto;padding:.75em 1em;line-height:1.7;font-family:Georgia,"Times New Roman",serif}` +
+// mobileCSS is injected when MobileReadable is set. It rewrites font-era
+// HTML for comfortable reading on a phone. Key rules:
+//
+//   - box-sizing:border-box — makes padding predictable in a layout built with
+//     HTML width attributes, so our padding doesn't cause overflow.
+//   - body — no fixed max-width here; let the table rules handle width instead.
+//     overflow-x:hidden catches any stray overflow without a scrollbar.
+//   - font element — overrides in-HTML size/face attributes (e.g. <font size="2">).
+//   - [width],[height] — cancels all HTML attribute widths/heights on every
+//     element (tables, tds, imgs, etc.) so fixed-pixel columns become fluid.
+//   - table — fluid, auto layout, no horizontal scroll.
+//   - td — auto width so a three-column table (nav | spacer | content) collapses
+//     to one usable column once the nav td is hidden.
+//   - img — responsive: never wider than its container.
+//   - td:has(>img[usemap]) — hides the entire nav column td, not just the image
+//     inside it; hiding only the img left a tall empty white box.
+//   - td:has(>img[src*="trans_1x1"]) — hides the 26 px spacer column td (a 1×1
+//     transparent GIF whose only job was spacing in the original table layout).
+const mobileCSS = `*{box-sizing:border-box}` +
 	`:root{font-size:18px}` +
+	`body{margin:0;padding:.75em 1em;line-height:1.7;font-family:Georgia,"Times New Roman",serif;overflow-x:hidden}` +
 	`font{font-size:1rem!important;font-family:inherit!important;color:inherit!important}` +
-	`table{max-width:100%!important;word-break:break-word}` +
-	`td,th{padding:.25em!important}` +
-	`img[usemap],map{display:none!important}`
+	`[width]{width:auto!important;max-width:100%!important}` +
+	`[height]{height:auto!important}` +
+	`table{width:100%!important;max-width:100%!important;table-layout:auto!important;border-collapse:collapse!important;word-break:break-word}` +
+	`td,th{width:auto!important;max-width:100%!important;padding:.35em .5em!important;vertical-align:top!important;overflow-wrap:break-word}` +
+	`img{max-width:100%!important;height:auto!important}` +
+	`img[usemap],map{display:none!important}` +
+	`td:has(>img[usemap]),td:has(>map){display:none!important}` +
+	`img[src*="trans_1x1"],img[src*="spacer"],img[height="1"],img[width="1"]{display:none!important}` +
+	`td:has(>img[src*="trans_1x1"]:only-child),td:has(>img[height="1"]:only-child){display:none!important}`
 
 // ensureViewport inserts <meta name="viewport" content="width=device-width,
 // initial-scale=1"> at the top of <head> when the document does not already

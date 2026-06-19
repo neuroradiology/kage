@@ -218,6 +218,40 @@ func TestMobileReadableInjectsViewportAndCSS(t *testing.T) {
 	if !strings.Contains(s, "font{font-size:1rem") {
 		t.Error("font override not in mobile CSS")
 	}
+	// Fluid table rules must be present.
+	if !strings.Contains(s, "table{width:100%") {
+		t.Error("fluid table rule missing")
+	}
+	// [width] override must be present so fixed HTML width attributes are cancelled.
+	if !strings.Contains(s, "[width]{width:auto") {
+		t.Error("[width] override missing")
+	}
+}
+
+func TestMobileReadableHidesNavColumnTd(t *testing.T) {
+	// paulgraham.com wraps its image-map nav in a <td>. Hiding only the img
+	// leaves a tall empty box; the CSS must also target the containing td.
+	in := `<html><head><title>T</title></head><body>` +
+		`<table><tr>` +
+		`<td><map name="nav"><area shape="rect" coords="0,0,67,21" href="index.html"></map>` +
+		`<img src="nav.gif" width="69" height="357" usemap="#nav"/></td>` +
+		`<td><img src="https://cdn.example.com/trans_1x1.gif" height="1" width="26"/></td>` +
+		`<td><p>Essay text.</p></td>` +
+		`</tr></table>` +
+		`</body></html>`
+	out, _, err := Strip([]byte(in), Options{MobileReadable: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(out)
+	// td:has(>img[usemap]) rule must be present so the whole nav column is hidden.
+	if !strings.Contains(s, "td:has(>img[usemap])") {
+		t.Error("td:has(>img[usemap]) rule missing from mobile CSS")
+	}
+	// td:has(>img[src*="trans_1x1"]) rule must be present for spacer column.
+	if !strings.Contains(s, `td:has(>img[src*="trans_1x1"]`) {
+		t.Error(`td:has(>img[src*="trans_1x1"]) spacer-column rule missing from mobile CSS`)
+	}
 }
 
 func TestMobileReadableSkipsExistingViewport(t *testing.T) {
