@@ -16,37 +16,37 @@ import (
 
 // cloneFlags holds the parsed flag values for one invocation.
 type cloneFlags struct {
-	out           string
-	reserved      string
-	workers       int
-	assetWorkers  int
-	browserPages  int
-	maxPages      int
-	maxDepth      int
-	traversal     string
-	maxAssetMB    int64
-	keepMedia     bool
-	skipExt       []string
-	allAssetHosts bool
-	timeout       time.Duration
-	settle        time.Duration
-	renderTO      time.Duration
-	scroll        bool
-	userAgent     string
-	subdomains    bool
-	scopePrefix   string
-	exclude       []string
-	noRobots      bool
-	noSitemap     bool
-	headful       bool
-	keepNoscript    bool
-	mobileReadable  bool
-	chromeBin       string
-	controlURL    string
-	noResume      bool
-	refresh       bool
-	force         bool
-	quiet         bool
+	out            string
+	reserved       string
+	workers        int
+	assetWorkers   int
+	browserPages   int
+	maxPages       int
+	maxDepth       int
+	traversal      string
+	maxAssetMB     int64
+	keepMedia      bool
+	skipExt        []string
+	allAssetHosts  bool
+	timeout        time.Duration
+	settle         time.Duration
+	renderTO       time.Duration
+	scroll         bool
+	userAgent      string
+	subdomains     bool
+	scopePrefix    string
+	exclude        []string
+	noRobots       bool
+	noSitemap      bool
+	headful        bool
+	keepNoscript   bool
+	mobileReadable bool
+	chromeBin      string
+	controlURL     string
+	noResume       bool
+	refresh        bool
+	force          bool
+	quiet          bool
 }
 
 func newCloneCmd() *cobra.Command {
